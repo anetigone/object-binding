@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+/vit-object-binding/
+/runs/
+/object_binding_server.zip
+/reproduction/model/
+/reproduction/hf_cache/
+/reproduction/data/
+/reproduction/deps/
+/reproduction/tmp/
+/reproduction/outputs/
+*.partial

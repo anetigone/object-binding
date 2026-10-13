@@ -1,0 +1,41 @@
+{
+  "dataset_root": "/path/to/ade20k",
+  "model": "facebook/dinov2-base",
+  "model_revision": null,
+  "output": "runs/phenomenon_dinov2b_ade",
+  "device": "cuda:0",
+  "layers": [
+    0,
+    3,
+    6,
+    9,
+    11
+  ],
+  "split_seed": 0,
+  "seeds": [
+    0
+  ],
+  "max_train": 2000,
+  "max_val": 300,
+  "max_test": 500,
+  "saved_patches": 256,
+  "sampled_patches": 64,
+  "eval_patches": 64,
+  "crop_size": 518,
+  "probes": [
+    "quadratic"
+  ],
+  "epochs": 16,
+  "batch_size": 32,
+  "learning_rate": 0.001,
+  "weight_decay": 0.0,
+  "scheduler_step": 8,
+  "scheduler_gamma": 0.2,
+  "visualize_images": 8,
+  "dataset_name": "ade20k",
+  "channels": [
+    "residual"
+  ],
+  "cache_budget_gib": 24,
+  "max_tasks": 5
+}

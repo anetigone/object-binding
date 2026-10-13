@@ -1,0 +1,18 @@
+{
+  "upstream_commit": "014c66b45ea262f9b6eec83ff388a1e1c10dfcaa",
+  "files": {
+    "reproduction/bootstrap_upstream.py": "bb2f9496dd521932e069f03220c44f566f390d683a508137605e061936330fa3",
+    "reproduction/check_numerics.py": "5353f04ac493910e3b89f5e84230039f2d9cdac3bf7229cf1847e7402ad6b501",
+    "reproduction/config-base.json": "92f3ec20178410f179a30bbccdb4b9e9d31648febe6d8cd703f6d60e8613e252",
+    "reproduction/config-full.json": "35368e4f4830d1884ddb616eda7373fa962abb1ad852e25b5bf6c59b03f23d3d",
+    "reproduction/config-qkv.json": "e580a2770d5a8512dce7a91834e597700c9d10c3c22677ab2c76d9d368a2e874",
+    "reproduction/config.json": "5d9981a43555f34078388b16ad1a8c674387042ff80e270899a3979633c83314",
+    "reproduction/phenomenon.py": "e48cad5962bae5b068ac6547734af80bb4d7207aa4c644c9bd96892956718c09",
+    "reproduction/README.md": "85623623793cec6ef5860a50c35a7dae240bc273d20ed9d6862c68e75ef376f7",
+    "reproduction/requirements-server.txt": "1ae1d77b5e3d3bfbe107523f78f80e3d60c154f27e67c6e9a80cb4002d6f53e7",
+    "reproduction/run_server.py": "feb9af8fd146ce6cc8f2960db40f7bfb503253d0fc215e2ce33521e7e1f3e5b0",
+    "reproduction/test_phenomenon.py": "0155ece38ee719a8dfa7d12b40139be8664500a4da26efc4acd21ac5fc06b92d",
+    "vit-object-binding/src/data_extractor.py": "9d8b15d0a051a4b0871ec7680be1f966b0b0a224e61a24fc9f18441f44452de0",
+    "vit-object-binding/src/utils/models.py": "3c0ef81169fbe3cb98894150282aab4189693cbf6e37f8251147797b95dc2544"
+  }
+}

@@ -1,0 +1,13 @@
+# Install into a dedicated server environment; install CUDA PyTorch separately.
+transformers==4.57.6
+huggingface-hub==0.36.0
+tokenizers==0.22.2
+numpy>=1.26,<3
+torchvision
+pandas
+opencv-python
+scipy
+scikit-learn
+matplotlib
+safetensors
+tqdm
