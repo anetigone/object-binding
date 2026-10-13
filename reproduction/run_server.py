@@ -150,7 +150,8 @@ def probe(c, mode):
 
 def load_backbone(c):
     model = AutoModel.from_pretrained(c['model'], revision=c['model_revision'],
-        cache_dir=str(HERE/'hf_cache'), attn_implementation='sdpa').to(c['device'])
+        cache_dir=str(Path(c.get('hf_cache',HERE/'hf_cache')).expanduser()),
+        attn_implementation='sdpa').to(c['device'])
     model.eval().requires_grad_(False)
     return model
 

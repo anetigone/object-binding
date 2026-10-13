@@ -69,6 +69,33 @@ python reproduction/phenomenon.py --config reproduction/config-base.json --datas
 
 ## 数据接口保持不变，扩展单独接入
 
+已有文件可放在项目根目录：
+
+```text
+project/
+  reproduction/
+  ade20k_hf/                 已处理的数据
+  hf_cache/                 已有HF模型缓存
+```
+
+`dataset_root` 指向 `ade20k_hf` 的绝对路径；`hf_cache` 可在JSON配置中填绝对路径。未指定 `hf_cache` 时，默认是 `reproduction/hf_cache`。如果不改配置，可将已有缓存放在默认位置或用符号链接复用。数据名不会决定格式：默认接口要求root中有 `index_ade20k.pkl`，或root下有 `ADE20K_2021_17_01/index_ade20k.pkl`。只有HF的`dataset_dict.json`和Arrow文件的目录不能直接传给这个默认接口，需使用服务器已有的读取factory。
+
+HF缓存root通常包含 `models--facebook--dinov2-large/{blobs,refs,snapshots}`；应将这个root设为 `hf_cache`，不是它的某个snapshot。模型的缓存revision应与配置一致。数据集相关下载缓存可以共用HF目录，提取后的特征仍在runs下。
+
+## 较长一轮的配置
+
+`config-overnight.json` 比较12/18/23层的residual/Q/K/V，2000/300/500张图、1seed、quadratic、32epochs，StepLR在16epoch衰减。缓存32.81GiB、12任务、约24192 optimizer steps，预算48GiB。它是增加训练预算的配置，**不是保证7–8小时完成的时间预测**，需按实际GPU速度估算。改变epoch/scheduler使用新输出目录，不能与16epoch结果混称同一训练设置。
+
+在项目根目录修改该配置的 `dataset_root` 和 `hf_cache` 后：
+
+```bash
+python reproduction/phenomenon.py --config reproduction/config-overnight.json --stage plan
+mkdir -p logs
+nohup bash -c 'python -u reproduction/phenomenon.py --config reproduction/config-overnight.json --stage all && python -u reproduction/phenomenon.py --config reproduction/config-overnight.json --stage interactions' > logs/overnight.log 2>&1 &
+```
+
+确认所有所需依赖与模型revision已在本地后，可以 `export HF_HUB_OFFLINE=1`，缺少权重时直接报错而非下载。观察日志中的提取速度和训练epoch速度，再估算剩余时间；不要为凑满时长直接展开全量矩阵。
+
 默认仍读原有 `index_ade20k.pkl`、JPG和`_seg.png`。已将HF数据处理成该格式时可直接用。不在此修改ADE20K loader。
 
 未来配置 `dataset_factory: "my_module:make_dataset"` 可接另一数据集。factory接收配置，返回：
