@@ -1,0 +1,18 @@
+{
+  "layer": 23,
+  "source_investigation": "investigation",
+  "probe_seed": 0,
+  "sampling_seed": 0,
+  "probe_weight_decay": 0.0,
+  "max_new_binding_tasks": 2,
+  "statistics_seed": 0,
+  "max_statistics_images": 512,
+  "statistics_patches_per_image": 64,
+  "statistics_batch_images": 16,
+  "ridge_relative": 0.01,
+  "minimum_effect": 0.005,
+  "bootstrap_repeats": 2000,
+  "bootstrap_bins": 2048,
+  "bootstrap_seed": 31415,
+  "bootstrap_max_auc_error": 0.0005
+}

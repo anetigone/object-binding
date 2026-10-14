@@ -1,5 +1,39 @@
 # 确认实例绑定随深度的变化
 
+## 第二关：两端可逆线性预条件
+
+L23 factor64 的 MLP 前后 AUROC 为 0.847471→0.837745，delta=−0.009726，
+95% CI=[−0.013677,−0.005496]，局部下降仍存在。下一步使用 `precondition_readout.py`，
+固定 `config-precondition-readout.json`：最多新增两个 full binding probe，两端预算一致。
+
+```bash
+python reproduction/precondition_readout.py --config reproduction/config-overnight.json --stage plan
+python reproduction/precondition_readout.py --config reproduction/config-overnight.json --stage all
+```
+
+必须使用服务器实际完成原 run 的配置和原有路径。`all` 顺序为 `fit→train→report`；
+可分别用 `--stage fit/train/report`。默认只执行 `plan`，不导入 ML 库、不写输出、不训练。
+结果写到原 run 的 `investigation/precondition_readout/`。
+
+预条件矩阵只使用同一组训练图/token：最多 512 图×64 token，固定 ridge_relative=0.01，
+不中心化、不截断维度，并保持统计样本平均平方范数。两端各自拟合一个可逆线性矩阵，
+作为冻结 buffer 随新 full probe checkpoint 保存；不生成完整变换特征缓存、不运行 backbone。
+两个 1024×1024 FP32 矩阵共约 8 MiB；实际统计开销由服务器 CPU/BLAS 和缓存读取速度决定。
+
+复用 `investigation/steps/binding/post_attention/layer_23` 与源 steps 设置中配置的
+residual full baseline。正式运行先核验 source settings、原 full readout 配置/预测与两端缓存。
+缺原 checkpoint、预测 NPZ 或特征时直接报错，不自动重训或提取。
+已完成任务跳过；设置/源结果/实现改变时用新的 `--experiment-output`。
+
+输出 `report.json` 与 `measurements.csv`，四端点共享图像聚类 bootstrap。
+主指标为“原始 MLP 差距−预条件后 MLP 差距”，正值表示差距缩小，并报告该量的直接 CI、
+两端各自改善及预条件后的局部下降。固定实质效应门槛 0.005，不扫描参数或自动进入下一分支。
+成功支持读出几何/优化/有限样本偏置参与差距，不证明全部信息保留或模型功能改善。
+
+```powershell
+& H:\anaconda3\envs\py312\python.exe reproduction/test_precondition_readout.py
+```
+
 ## L23 局部定位的同型低秩读出检查（下一步）
 
 `local_readout.py` 只给 L23 `post_attention` 缓存补一个 `factor64` probe，复用
