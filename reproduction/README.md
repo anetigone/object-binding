@@ -1,5 +1,17 @@
 # 确认实例绑定随深度的变化
 
+## 确认通过后：固定读出器交叉评估与独立类别分析
+
+新增 `post_confirmation.py`，默认读取 `runs/confirmation_l23_v1` 的冻结配置和完整产物。
+两种 binding probe 各做 2×2 固定读出，共 8 格、零新增 binding 训练；独立类别 probe
+只新增两端各一个、16 epochs。无 backbone 前向，结果写到独立 `post_confirmation_v1/`。
+完整命令、配对统计和解释边界见 [POST_CONFIRMATION.md](POST_CONFIRMATION.md)。
+
+```bash
+python reproduction/post_confirmation.py --stage plan
+python reproduction/post_confirmation.py --stage all
+```
+
 ## 当前下一轮：新图像上的 L23 确认
 
 完整安排和停止规则见 [NEXT_EXPERIMENTS.md](NEXT_EXPERIMENTS.md)。
