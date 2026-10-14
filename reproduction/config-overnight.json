@@ -39,5 +39,6 @@
   ],
   "cache_budget_gib": 48,
   "max_tasks": 12,
-  "hf_cache": "reproduction/hf_cache"
+  "hf_cache": "reproduction/hf_cache",
+  "offline": true
 }

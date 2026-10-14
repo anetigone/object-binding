@@ -96,6 +96,8 @@ nohup bash -c 'python -u reproduction/phenomenon.py --config reproduction/config
 
 确认所有所需依赖与模型revision已在本地后，可以 `export HF_HUB_OFFLINE=1`，缺少权重时直接报错而非下载。观察日志中的提取速度和训练epoch速度，再估算剩余时间；不要为凑满时长直接展开全量矩阵。
 
+较长配置现在默认 `offline: true`，通过 `local_files_only` 禁止权重联网检查。缓存必须包含配置指定的revision。QKV hook同时支持旧的嵌套query/key/value及新版直接q_proj/k_proj/v_proj结构，未支持结构会在提取前报错且不留下部分hook。可视化也直接hook block输出，避免不同版本hidden_states元组约定影响层号。模型实现版本写入environment.json；跨版本的数值一致性仍需另行验证。
+
 默认仍读原有 `index_ade20k.pkl`、JPG和`_seg.png`。已将HF数据处理成该格式时可直接用。不在此修改ADE20K loader。
 
 未来配置 `dataset_factory: "my_module:make_dataset"` 可接另一数据集。factory接收配置，返回：

@@ -1,6 +1,7 @@
 """Resource-bounded phenomenon screening. --stage plan needs no ML dependencies."""
 from pathlib import Path
 import argparse, copy, hashlib, importlib, json, math, shutil, subprocess
+import importlib.metadata
 
 HERE = Path(__file__).resolve().parent
 MODELS = {
@@ -102,11 +103,33 @@ class Capture:
     """
     def __init__(self, model, layers, channels):
         self.handles, self.values, self.indices = [], {}, None
+        targets = []
         for layer in layers:
             block = model.encoder.layer[layer]
             for channel in channels:
-                module = block if channel=='residual' else getattr(block.attention.attention,{'q':'query','k':'key','v':'value'}[channel])
+                module = block if channel=='residual' else self.projection(block,channel)
+                targets.append((module,channel,layer))
+        # Resolve every target first, so an incompatible model leaves no partial hooks.
+        try:
+            for module,channel,layer in targets:
                 self.handles.append(module.register_forward_hook(self.hook(channel,layer)))
+        except Exception:
+            self.close()
+            raise
+
+    @staticmethod
+    def projection(block,channel):
+        attention = block.attention
+        # Transformers 4.x: attention.attention.query/key/value.
+        # Refactored versions: attention.q_proj/k_proj/v_proj.
+        candidates = [attention,getattr(attention,'attention',None)]
+        for candidate in candidates:
+            if candidate is None: continue
+            for name in ({'q':'query','k':'key','v':'value'}[channel],channel+'_proj'):
+                module = getattr(candidate,name,None)
+                if module is not None and hasattr(module,'register_forward_hook'):
+                    return module
+        raise ValueError(f'Unsupported DINOv2 QKV layout: {type(attention).__name__}; expected query/key/value or q_proj/k_proj/v_proj. Inspect block.attention before extraction.')
 
     def hook(self,channel,layer):
         def capture(module, inputs, output):
@@ -218,6 +241,7 @@ def extract(c, core):
             # A loop variable can otherwise keep the last mmap open on Windows.
             if 'mm' in locals(): del mm
     core.save_json(root/'environment.json',{'torch':torch.__version__,'cuda':torch.version.cuda,
+        'transformers':importlib.metadata.version('transformers'),
         'model_commit':getattr(model.config,'_commit_hash',None),'model':c['model'],
         'code_commit':git_commit(),'config':c})
 

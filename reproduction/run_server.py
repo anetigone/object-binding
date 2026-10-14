@@ -151,6 +151,7 @@ def probe(c, mode):
 def load_backbone(c):
     model = AutoModel.from_pretrained(c['model'], revision=c['model_revision'],
         cache_dir=str(Path(c.get('hf_cache',HERE/'hf_cache')).expanduser()),
+        local_files_only=c.get('offline',False),
         attn_implementation='sdpa').to(c['device'])
     model.eval().requires_grad_(False)
     return model
@@ -460,13 +461,23 @@ def visualize(c):
         folder = out/'visualizations'/str(image_id)
         folder.mkdir(parents=True,exist_ok=True)
         maps = []
+        # Capture block outputs directly: hidden_states tuple conventions can differ
+        # between Transformers versions, especially around final LayerNorm.
+        from phenomenon import Capture
+        capture = Capture(model,c['layers'],['residual'])
+        capture.indices = np.arange(37*37)
+        try:
+            with torch.inference_mode():
+                model(pixel_values=pixel[:1].to(c['device']))
+            hidden = dict(capture.values)
+        finally:
+            capture.close()
         with torch.inference_mode():
-            hidden = model(pixel_values=pixel[:1].to(c['device']),output_hidden_states=True).hidden_states
             for layer in c['layers']:
                 trained = probe(c,'quadratic').to(c['device'])
                 checkpoint = out/'probes'/'quadratic'/f'layer_{layer}'/f"seed_{c['seeds'][0]}"/'checkpoint.pt'
                 trained.load_state_dict(torch.load(checkpoint,map_location=c['device'],weights_only=True))
-                x = hidden[layer+1][0,1:]
+                x = torch.tensor(hidden['residual',layer],device=c['device'])
                 score = trained.forward(x[query:query+1].expand_as(x),x).sigmoid().cpu().numpy()
                 maps.append(score.reshape(37,37))
         image_cfg = NS(model=NS(patch_size=14),data_extractor=NS(image_processor=NS(mean=[.485,.456,.406],std=[.229,.224,.225],shortest_edge=518,crop_size=[518,518],normalize=False)))

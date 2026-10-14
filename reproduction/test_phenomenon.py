@@ -63,6 +63,40 @@ class Hooks(unittest.TestCase):
         np.testing.assert_allclose(result,result.transpose(0,2,1))
         self.assertAlmostEqual(float(result[0,1,2]),float((q[1,:4]@k[2,:4]+q[2,:4]@k[1,:4])/4))
 
+    def test_refactored_direct_projections(self):
+        import torch
+        from torch import nn
+        from types import SimpleNamespace as NS
+        import numpy as np
+        class Block(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.norm1 = nn.LayerNorm(8)
+                self.attention = nn.Module()
+                for name in ('q_proj','k_proj','v_proj'): setattr(self.attention,name,nn.Linear(8,8))
+            def forward(self,x):
+                z = self.norm1(x)
+                return x+self.attention.q_proj(z)+self.attention.k_proj(z)+self.attention.v_proj(z)
+        block = Block()
+        capture = p.Capture(NS(encoder=NS(layer=[block])),[0],list(p.CHANNELS))
+        capture.indices = np.array([0,2])
+        x = torch.randn(1,5,8)
+        with torch.inference_mode():
+            out = block(x)
+            for ch in ('q','k','v'):
+                expected = getattr(block.attention,ch+'_proj')(block.norm1(x))[0,[1,3]].numpy()
+                np.testing.assert_allclose(capture.values[ch,0],expected)
+        np.testing.assert_allclose(capture.values['residual',0],out[0,[1,3]].numpy())
+        capture.close()
+
+    def test_invalid_layout_leaves_no_hooks(self):
+        from torch import nn
+        from types import SimpleNamespace as NS
+        block = nn.Module(); block.attention = nn.Module()
+        with self.assertRaisesRegex(ValueError,'Unsupported DINOv2 QKV layout'):
+            p.Capture(NS(encoder=NS(layer=[block])),[0],['residual','q'])
+        self.assertFalse(block._forward_hooks)
+
 class Evaluation(unittest.TestCase):
     def test_hard_instance_and_category_tasks_have_correct_labels(self):
         import numpy as np
