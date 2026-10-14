@@ -1,0 +1,8 @@
+{
+  "layer": 23,
+  "alphas": [0.0, 0.5, 1.0],
+  "max_new_binding_tasks": 1,
+  "max_new_semantic_tasks": 1,
+  "semantic_bootstrap_repeats": 2000,
+  "semantic_bootstrap_seed": 27182
+}

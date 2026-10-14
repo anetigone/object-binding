@@ -256,8 +256,9 @@ def metrics(y, score, compute_auc=True):
         'positive_rate':float(y.mean()), 'predicted_positive_rate':float(pred.mean()),
         'recall':recall, 'false_positive_rate':fpr}
 
-def eval_probe(c, model, split, layer, return_detail=False):
-    acts, meta = cached(c, split, layer)
+def eval_probe(c, model, split, layer, return_detail=False, cached_fn=None):
+    # An explicit provider also supports lazy cached feature interventions.
+    acts, meta = (cached_fn or cached)(c, split, layer)
     groups = {k:([],[]) for k in ('all','foreground','same_class_different_instance','different_class','same_instance_foreground','background', 'instance_vs_same_class', 'class_grouping_cross_instance')}
     records, detail = [], []
     upper = np.triu_indices(c['eval_patches'], k=1)

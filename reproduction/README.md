@@ -192,6 +192,52 @@ steps scope也可单独执行semantic，默认3个任务；depth默认4个。`se
 
 本地只验证CPU合成数据、真实probe类、缓存/配对检查和hook；服务器正式模型的提取与数值一致性仍由服务器运行确认。
 
+## 下一轮：类别变化的 CI 与 MLP 更新中间点
+
+新增 `mlp_update.py`，默认配置 `config-mlp-update.json`。只读取现有缓存和已完成结果，**没有提取阶段，不加载backbone，也不写入大特征缓存**。代码改动、配置与测试都在本地完成；远端同步同一版本，避免直接编辑服务器代码产生分叉。已有 `config-investigation.json` 不改动，因此不会使之前 `depth/steps/requested_settings.json` 失效。
+
+默认 L23、alpha=[0,0.5,1]。两个端点分别引用steps的post_attention与residual读出器（residual binding优先复用validation/full_seed0），不重新训练。中间点逐batch从FP32 mmap计算 `z + alpha*(h-z)`：z为attention残差更新后、h为block输出。只新增**1个binding probe、1个独立类别probe**。初始化、patch/batch采样、优化器、epochs与validation选择规则从已完成 `steps/requested_settings.json` 的设置继承，不用test结果选择alpha。
+
+同步后使用实际完成旧实验的config；默认plan不需要ML依赖，不创建输出：
+
+```bash
+python reproduction/test_mlp_update.py
+python reproduction/mlp_update.py --config reproduction/config-overnight.json --stage plan
+```
+
+先补已有类别结果的CI，不训练任何模型：
+
+```bash
+python reproduction/mlp_update.py --config reproduction/config-overnight.json --semantic-scope both --stage semantic-ci
+```
+
+`--semantic-scope steps` 只检查L23的attention/MLP两个步骤，`depth` 检查相邻深度及首末层，`both` 检查两者。默认输出 `investigation/mlp_update/semantic_ci_both.json` / `.csv`（文件后缀随scope变化）。源 `depth/steps/report.json`、checkpoint和缓存不改写。
+
+- 成对重采样图像，保留每张图所有已知前景patch；每次先汇总每类support/correct，再计算pooled accuracy与macro recall，**不平均逐图macro recall**。
+- 输出两指标的点估计、配对变化CI与bootstrap SE。每类报告support、涉及图像数、两个位置召回差和对总体macro变化的贡献，按绝对贡献排序，仅作探索性诊断，不据此继续挑alpha。
+- macro每次对该重采样中有support的类别求平均，稀有类别可能消失；显式报告类别覆盖数区间。CI只反映当前拟合probe和test split下的图像采样不确定性，不包括训练seed波动或多重比较校正。
+- 核验source训练/数据provenance、image ID、逐图class support、当前缓存上的固定eval patch选择，以及汇总metrics与逐图计数一致性。新增semantic评估会保存patch/label fingerprint；旧端点无需重跑，使用已记录设置和重建support验证，报告指纹检查的覆盖数量。
+
+再运行中间点（沿用GPU配置，仅训练probe）：
+
+```bash
+python reproduction/mlp_update.py --config reproduction/config-overnight.json --stage binding
+python reproduction/mlp_update.py --config reproduction/config-overnight.json --stage semantic
+python reproduction/mlp_update.py --config reproduction/config-overnight.json --stage report
+```
+
+或一次执行当前小面板，默认先做steps类别CI：
+
+```bash
+python reproduction/mlp_update.py --config reproduction/config-overnight.json --stage all
+```
+
+`all` 为 `semantic-ci → 中间点binding → 中间点semantic → report`，不启动其他模型、补层或backbone前向。已完成中间点跳过。任务上限写在新配置中；增添alpha需显式提高上限并使用新 `--output`。source路径不同可传 `--source-investigation`，所有原始特征仍通过原config的output定位。
+
+新目录保存 `requested_settings.json`、`code_provenance.json`、中间点checkpoint/history/selection/predictions、`report.json`、`measurements.csv` / `.png`。报告同时比较0→0.5、0.5→1和0→1的binding配对CI及semantic配对CI，标记端点复用和完成数量。源metadata保存SHA256，特征文件记录大小/mtime并验证签名和逐位配对，不额外读取几十GiB作完整hash。训练实现或源设置改变时拒绝混用完成的probe；报告单独记录当前代码provenance。
+
+该实验测量缓存表示中MLP更新强度与**重新拟合读出器的可解码性**关系。并未修改完整模型的前向或验证下游行为，不能直接宣称恢复了模型的实例推理能力，也不预设语义覆盖解释成立。
+
 ## 主指标与结果
 
 优先看两个不依赖固定阈值的任务：

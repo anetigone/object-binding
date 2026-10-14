@@ -253,11 +253,12 @@ def reusable_binding(c,s,channel,layer):
     return src
 
 
-def train_binding(c,s,out):
+def train_binding(c,s,out,core=None,cache_validator=None):
     import numpy as np
     import torch
     import validate_decline as v
-    validate_caches(c); core=p.core_module(c)
+    (cache_validator or validate_caches)(c)
+    if core is None: core=p.core_module(c)
     for channel,layer in cache_jobs(c):
         src=reusable_binding(c,s,channel,layer)
         dest=out/'binding'/channel/f'layer_{layer}'
@@ -280,7 +281,7 @@ def train_binding(c,s,out):
                 optimizer.zero_grad(set_to_none=True)
                 loss=torch.nn.functional.binary_cross_entropy_with_logits(core.batch_logits(model,x),(ids[:,:,None]==ids[:,None,:]).float())
                 loss.backward(); optimizer.step(); loss_sum+=loss.item()*len(rows); count+=len(rows)
-            scheduler.step(); model.eval(); _,_,detail=core.eval_probe(cfg,model,'val',layer,True)
+            scheduler.step(); model.eval(); _,_,detail=core.eval_probe(cfg,model,'val',layer,True,cached_fn=core.cached)
             score=v.exact_task_score(detail)
             if score is None: raise ValueError('Validation lacks hard-instance labels')
             history.append(dict(epoch=epoch+1,train_loss=loss_sum/count,val_hard_instance_auroc=score))
@@ -289,7 +290,7 @@ def train_binding(c,s,out):
                 write(dest/'selection.json',dict(epoch=epoch+1,val_hard_instance_auroc=score,criterion='validation hard-instance AUROC; first epoch wins ties'))
             print(f'{channel} L{layer} binding epoch {epoch+1}: val={score:.4f}',flush=True)
         model.load_state_dict(torch.load(dest/'checkpoint.pt',map_location=c['device'],weights_only=True)); model.eval()
-        metrics,records,detail=core.eval_probe(cfg,model,'test',layer,True)
+        metrics,records,detail=core.eval_probe(cfg,model,'test',layer,True,cached_fn=core.cached)
         write(dest/'history.json',history); write(dest/'per_image.json',records)
         v.save_predictions(dest/'test_predictions.npz',detail,core.cached(cfg,'test',layer)[1]['image_id'])
         write(dest/'metrics.json',metrics) # completion marker written last
@@ -317,16 +318,20 @@ def evaluate_semantic(c,core,model,channel,layer,split,classes):
             if (y[valid]>=classes).any(): raise ValueError('Semantic class exceeds configured taxonomy')
             x=torch.tensor(np.asarray(acts[row,picks]),device=c['device'])
             pred=model(x).argmax(-1).cpu().numpy(); targets.append(y[valid]); predicted.append(pred[valid])
-            details.append(dict(image_id=int(image_id),**semantic_metrics(y[valid],pred[valid],classes)))
+            sample=[int(image_id),picks.tolist(),meta['position'][row,picks].tolist(),y.tolist(),valid.tolist()]
+            fingerprint=hashlib.sha256(json.dumps(sample,separators=(',',':')).encode()).hexdigest()
+            details.append(dict(image_id=int(image_id),evaluation_fingerprint=fingerprint,
+                **semantic_metrics(y[valid],pred[valid],classes)))
     return semantic_metrics(np.concatenate(targets),np.concatenate(predicted),classes),details
 
 
-def train_semantic(c,s,out):
+def train_semantic(c,s,out,core=None,cache_validator=None):
     import numpy as np
     import torch
-    validate_caches(c)
+    (cache_validator or validate_caches)(c)
     if len(cache_jobs(c))>s['max_semantic_tasks']: raise ValueError('Semantic task limit exceeded')
-    core=p.core_module(c); classes=s['semantic_num_classes']
+    if core is None: core=p.core_module(c)
+    classes=s['semantic_num_classes']
     for channel,layer in cache_jobs(c):
         dest=out/'semantic'/channel/f'layer_{layer}'
         if (dest/'metrics.json').exists(): continue
