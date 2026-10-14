@@ -238,6 +238,35 @@ python reproduction/mlp_update.py --config reproduction/config-overnight.json --
 
 该实验测量缓存表示中MLP更新强度与**重新拟合读出器的可解码性**关系。并未修改完整模型的前向或验证下游行为，不能直接宣称恢复了模型的实例推理能力，也不预设语义覆盖解释成立。
 
+## 范数匹配对照：保留输出方向，匹配 attention 后的尺度
+
+新增独立入口 `norm_control.py`、配置 `config-norm-control.json`，不修改旧alpha配置或已有实验目录。默认只对L23新增一个条件：
+
+```text
+matched = h * ||z||_2 / max(||h||_2, epsilon)
+z = post_attention, h = post_block, epsilon = 1e-12
+```
+
+每个patch独立计算最后一个维度的L2范数，不在图像或batch间汇总，不减均值，不做LayerNorm。范数与缩放使用float64，返回FP32；非零token保留h的方向，范数匹配z。h近零但z明显非零时无法满足方向保持，直接报错，不引入替代方向。近零token计数和数值误差写入审计。
+
+原始z/h的binding与类别probe均引用steps/validation的已完成结果。只新增**1个binding、1个类别probe**，训练设置、抽样seed和val选择规则继承已完成steps；不重训旧alpha中间点。逐batch从现有mmap生成matched特征，没有backbone前向和新的大特征缓存。
+
+代码在本地修改并验证，远端只同步；同步后传服务器实际完成旧实验的config：
+
+```bash
+python reproduction/test_norm_control.py
+python reproduction/norm_control.py --config reproduction/config-overnight.json --stage plan
+python reproduction/norm_control.py --config reproduction/config-overnight.json --stage all
+```
+
+默认plan只读、无需ML依赖；all为 `audit → binding → semantic → report`。也可以单独执行同名阶段，完成的probe自动跳过。默认新目录 `investigation/norm_control/`，拒绝把输出设为原run、steps、depth或mlp_update目录；原checkpoint、报告和缓存不改写。`--source-investigation` 可指向自定义steps所在的父目录，`--output` 可改新结果目录。原model/data配置仍从 `--config` 定位。
+
+- `norm_audit.json`：使用**test固定eval patch样本**，报告所有patch和已知前景patch的z/h/matched范数分位数、h/z范数比、范数相对误差、h与matched余弦相似度及近零计数；要求匹配范数满足rtol=2e−6、atol=2epsilon，不扫描整个train缓存。
+- 新条件checkpoint/history/selection、测试预测与逐图计数，沿用原训练规则。配置与源文件provenance改变时拒绝混用已完成probe。
+- `report.json`、`measurements.csv` / `.png`：呈现z、h、matched三个条件，并对z→h、h→matched、z→matched报告binding配对图像CI、类别accuracy/macro recall配对CI及逐类贡献。允许部分报告，明确完成数量；不按测试结果选择其他epsilon。
+
+若h→matched的读出性能恢复，说明范数成分参与可读出性变化。该对照使用了z的标量范数，可能也传递z中携带的标量信息，**不能单凭恢复就证明纯优化伪影、唯一尺度原因或模型内部信息没有丢失**。若差异仍在，再研究表示方向/几何。所有结果仍是重新拟合probe的缓存测量，不是完整模型的行为干预。
+
 ## 主指标与结果
 
 优先看两个不依赖固定阈值的任务：
