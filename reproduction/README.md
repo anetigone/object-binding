@@ -1,5 +1,25 @@
 # 确认实例绑定随深度的变化
 
+## 当前下一轮：新图像上的 L23 确认
+
+完整安排和停止规则见 [NEXT_EXPERIMENTS.md](NEXT_EXPERIMENTS.md)。
+新增 `confirm_l23.py` 与独立 `config-confirmation*.json`：先排除旧 train/val/test
+图像再抽样，显式冻结图像清单/配置/实现哈希，只提取 L23 两个位置，新增 4 个
+full/factor64 binding probe。默认 plan 只读；先 freeze，再 all。缓存约 5.47 GiB。
+不覆盖探索 run；不自动重新开启预条件、补深度或扩大模型。
+
+```powershell
+& H:\anaconda3\envs\py312\python.exe reproduction/test_confirmation.py
+& H:\anaconda3\envs\py312\python.exe reproduction/confirm_l23.py --stage plan
+```
+
+正式数据/权重/依赖准备好后：
+
+```bash
+python reproduction/confirm_l23.py --stage freeze
+python reproduction/confirm_l23.py --stage all
+```
+
 ## 第二关：两端可逆线性预条件
 
 L23 factor64 的 MLP 前后 AUROC 为 0.847471→0.837745，delta=−0.009726，

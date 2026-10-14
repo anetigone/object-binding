@@ -136,10 +136,10 @@ def audit(c,s,out):
             'scope':'Manifest and prediction alignment audit; cannot certify a changed server extractor from provenance alone.'})
     write(out/'position_audit.json',rows)
 
-def verify_positions(c,s,out):
+def verify_positions(c,s,out,core=None):
     """Recompute only a few images to check cached values against actual hooks."""
     import torch
-    core = p.core_module(c)
+    if core is None: core = p.core_module(c)
     # Match extract(): RNG state, TF32, cuDNN benchmark and determinism must be
     # configured before loading the model or processing any image.
     core.seed_all(c.get('split_seed',0))

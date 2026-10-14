@@ -1,0 +1,16 @@
+{
+  "exclusion_split_files": ["runs/phenomenon_overnight/splits.json"],
+  "sampling_seed": 0,
+  "variants": [
+    {"name": "full_seed0", "kind": "full", "seed": 0, "weight_decay": 0.0},
+    {"name": "factor64", "kind": "factor", "factor_width": 64, "seed": 0, "weight_decay": 0.0}
+  ],
+  "primary_variant": "full_seed0",
+  "minimum_effect": 0.005,
+  "max_binding_tasks": 4,
+  "bootstrap_repeats": 10000,
+  "bootstrap_bins": 2048,
+  "bootstrap_seed": 31415,
+  "bootstrap_max_auc_error": 0.0005,
+  "verify_images": 3
+}
