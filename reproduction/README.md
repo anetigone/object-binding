@@ -1,5 +1,39 @@
 # 确认实例绑定随深度的变化
 
+## L23 局部定位的同型低秩读出检查（下一步）
+
+`local_readout.py` 只给 L23 `post_attention` 缓存补一个 `factor64` probe，复用
+`validation/readouts/residual/factor64/layer_23`。不会重跑 backbone、提取特征、
+训练类别 probe 或自动开始预条件实验。不要跨 full/factor 读出器比较 MLP 两端。
+
+传入服务器实际完成原 run 的配置，保持数据路径和 output 一致：
+
+```bash
+python reproduction/local_readout.py --config reproduction/config-overnight.json --stage plan
+python reproduction/local_readout.py --config reproduction/config-overnight.json --stage all
+```
+
+默认 `plan` 只列出缺失文件，不写文件、不导入 ML 依赖。设置在
+`config-local-readout.json`，默认只允许一个新增 binding 任务。`--stage train/report`
+可分别训练和生成报告。新增结果写到原 run 下 `investigation/local_readout/`，
+已有缓存、原 checkpoint 和结果保持不变；修改设置或代码后使用新的
+`--experiment-output`（必须是原 run 内独立目录）。
+
+正式运行前核对已完成 residual 的 `run.json`、模型/data/训练参数、rank、seed、
+配对抽样和验证选择规则，审计两端缓存与原预测。缺少服务器特征或原 checkpoint、
+预测 NPZ 时直接报错，无提取/重训 fallback；只下载 JSON/CSV 的本地 runs 不足以正式运行。
+
+报告 `report.json` 给出 residual−post_attention 的 hard-instance AUROC 配对图像
+bootstrap CI，以及同 crop 的固定 anchor 排序。默认实质效应阈值为 0.005，
+只在整个 CI 落入 ±阈值时标注小差异；CI 跨零但较宽时标注不确定。
+这些是固定 split、已拟合 probe 条件下的探索结果，不证明信息丢失或原模型功能受损。
+
+本地小型 CPU 测试（不运行预训练模型）：
+
+```powershell
+& H:\anaconda3\envs\py312\python.exe reproduction/test_local_readout.py
+```
+
 目的：先验证 residual 中实例区分的深度变化，再定位受损的 patch 关系与计算步骤。已有 L18→L23 下降的测量验证后，优先用同模型、同数据的条件分析和末段定位推进机制研究；跨模型/数据集放到解释有信号后。中层峰值、深层类别分组都不是预设结论。
 
 本次修改没有运行预训练模型或正式训练。现有 ADE20K 数据读取接口保持不变；服务器自行处理的版本没有被本地覆盖。**主入口改为 `phenomenon.py`**，训练/评估复用 `run_server.py`。

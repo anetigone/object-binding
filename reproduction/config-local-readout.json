@@ -1,0 +1,12 @@
+{
+  "layer": 23,
+  "residual_source": "validation/readouts/residual/factor64/layer_23",
+  "variant": {"name": "factor64", "kind": "factor", "factor_width": 64, "seed": 0, "weight_decay": 0.0},
+  "sampling_seed": 0,
+  "max_new_binding_tasks": 1,
+  "minimum_effect": 0.005,
+  "bootstrap_repeats": 2000,
+  "bootstrap_bins": 2048,
+  "bootstrap_seed": 31415,
+  "bootstrap_max_auc_error": 0.0005
+}
