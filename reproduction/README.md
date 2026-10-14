@@ -1,6 +1,21 @@
 # 确认实例绑定随深度的变化
 
-## 当前下一步：原始产物复核与一个线性对齐实验
+## 当前下一步：关系观察与训练目标对照
+
+使用独立入口 `observe_binding.py`，不要求复用旧缓存或 checkpoint。
+默认重新提取 L23 两端并训练 8 个 probe，比较 all-pairs BCE 和同类、同 anchor、
+距离匹配的排序训练；输出配对统计和原图案例。完整说明见 [OBSERVATION.md](OBSERVATION.md)。
+
+```bash
+python reproduction/observe_binding.py --stage plan
+python reproduction/observe_binding.py --stage all
+```
+
+可加 `--splits-file runs/confirmation_l23_v1/splits.json`，保持旧确认图像 ID，但在
+新目录重新提取/训练。先设置 config-observation.json 的服务器数据/权重路径。
+这轮是探索，不称为新独立确认；默认输出 runs/observation_l23_v1。
+
+## 已完成分支：原始产物复核与一个线性对齐实验
 
 `linear_alignment.py` 先重算原 binding CI、验证源 checkpoint 和类别结果，再用固定
 训练 token 拟合单个 h→z ridge 映射，冻结原 z-probe 评估。没有新 probe 训练或 backbone 前向。
