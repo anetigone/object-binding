@@ -1,5 +1,5 @@
 {
-  "dataset_root": "/path/to/ade20k",
+  "dataset_root": "ADE20K_2021_17_01",
   "model": "facebook/dinov2-large",
   "model_revision": "47b73eefe95e8d44ec3623f8890bd894b6ea2d6c",
   "output": "runs/phenomenon_overnight",
@@ -39,6 +39,6 @@
   ],
   "cache_budget_gib": 48,
   "max_tasks": 12,
-  "hf_cache": "reproduction/hf_cache",
+  "hf_cache": "hf_cache",
   "offline": true
 }

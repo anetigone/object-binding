@@ -98,6 +98,27 @@ nohup bash -c 'python -u reproduction/phenomenon.py --config reproduction/config
 
 较长配置现在默认 `offline: true`，通过 `local_files_only` 禁止权重联网检查。缓存必须包含配置指定的revision。QKV hook同时支持旧的嵌套query/key/value及新版直接q_proj/k_proj/v_proj结构，未支持结构会在提取前报错且不留下部分hook。可视化也直接hook block输出，避免不同版本hidden_states元组约定影响层号。模型实现版本写入environment.json；跨版本的数值一致性仍需另行验证。
 
+## 先验证 L18–L23 的下降，不扩大模型数量
+
+新入口 `validate_decline.py` 只消费现有run；不会提取新的特征，也不修改原有checkpoint。默认只检查residual两层。其他通道先不自动展开。
+
+```bash
+python reproduction/validate_decline.py --config reproduction/config-overnight.json --stage plan
+python reproduction/test_validation.py
+python reproduction/validate_decline.py --config reproduction/config-overnight.json --stage all
+```
+
+配置沿用服务器实际完成的那份config，其 `output` 必须指向已有的 overnight run。`config-validation.json` 是独立的小面板设置。结果写到原run下的 `validation/`，不占新的大特征缓存。也可分阶段运行 `audit`、`verify-positions`、`bootstrap`、`readouts`、`geometry`、`report`。
+
+1. **逐图配对bootstrap**：同一重采样图像的全部patch对一起进入两个层，报告 pooled pair AUROC 的L23−L18与95% CI，B=10000。不把patch对视为独立样本。为节省CPU，CI采用固定分位数直方图近似，点估计仍使用精确排序；输出近似误差，超过0.0005会停止并要求增加bins。它不是精确排序bootstrap，也不是逐图AUROC的macro平均；大量配对的图像仍有更大权重。
+2. **计算位置检查**：audit核对manifest和预测配对；verify-positions额外对3张测试图像的实际crop做前向，逐向量对照现有缓存，确认post-block与投影位置，并检查当前实现/预处理是否与缓存一致。前向只做少量审计图像，不建立新缓存。失败应先解释版本/预处理差异，不继续读出器实验。
+3. **有限读出器面板**：full seed0、full L2=1e−4、author factor width64/128、full seed1，以及同一final LayerNorm作用于两层的full seed0，共12个训练任务。所有新任务固定训练batch/patch抽样seed，初始化seed可变；统一按验证集hard-instance AUROC选epoch，测试集只在选择后评估。这与原run按总体val accuracy选epoch的口径不同，不能直接当作原checkpoint的重复测量。作者factor宽度r对应对称W秩至多2r，不宣称rank=r。L2作用于参数，full与factor参数化的惩罚不等价。
+4. **几何差异检查**：只补读测试标注；使用真实crop像素中的实例面积比例与4邻域边界像素比例，避免把抽中patch占比误称真实面积。检查正/负例距离、平均实例面积、最大端点边界比例的分布，并在粗联合分层内比较两层AUROC，用同一组overlap权重汇总。跨crop距离没有统一坐标，明确排除并报告其数量；小样本/无重叠cell也排除并报告覆盖率。分层是探索性诊断，不是充分控制所有混杂或因果证据。
+
+输出 `paired_bootstrap.json`、`position_audit.json`、`runtime_position_audit.json`、`readout_sensitivity.csv`、`geometry_checks.json`、`test_geometry.npz` 和 `status.json`。readouts各自保存checkpoint/selection/history/metrics/per_image/test_predictions；用于bootstrap的原预测不覆盖。LayerNorm对照只额外加载一次冻结权重并保存小量LN参数，不对整个数据集前向。
+
+若修改面板、epoch或其他设置，使用新的 `--validation-output` 目录。默认面板预先固定，不根据测试结果继续挑rank/正则化；若方向对合理配置敏感，先研究测量问题再扩展模型/数据集。
+
 默认仍读原有 `index_ade20k.pkl`、JPG和`_seg.png`。已将HF数据处理成该格式时可直接用。不在此修改ADE20K loader。
 
 未来配置 `dataset_factory: "my_module:make_dataset"` 可接另一数据集。factory接收配置，返回：

@@ -1,0 +1,21 @@
+{
+  "layers": [18, 23],
+  "channels": ["residual"],
+  "baseline_probe": "quadratic",
+  "baseline_seed": 0,
+  "bootstrap_repeats": 10000,
+  "bootstrap_bins": 2048,
+  "bootstrap_seed": 31415,
+  "bootstrap_max_auc_error": 0.0005,
+  "sampling_seed": 0,
+  "verify_images": 3,
+  "max_training_tasks": 12,
+  "variants": [
+    {"name": "full_seed0", "kind": "full", "seed": 0, "weight_decay": 0.0},
+    {"name": "full_l2", "kind": "full", "seed": 0, "weight_decay": 0.0001},
+    {"name": "factor64", "kind": "factor", "factor_width": 64, "seed": 0, "weight_decay": 0.0},
+    {"name": "factor128", "kind": "factor", "factor_width": 128, "seed": 0, "weight_decay": 0.0},
+    {"name": "full_seed1", "kind": "full", "seed": 1, "weight_decay": 0.0},
+    {"name": "full_shared_final_ln", "kind": "full", "seed": 0, "weight_decay": 0.0, "shared_final_layernorm": true}
+  ]
+}
