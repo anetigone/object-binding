@@ -5,6 +5,7 @@ Readouts fit a small fixed sensitivity panel; final-LN control loads weights onl
 """
 from pathlib import Path
 import argparse, copy, csv, hashlib, json, math
+import importlib.metadata
 import numpy as np
 from sklearn.metrics import roc_auc_score
 import phenomenon as p
@@ -137,7 +138,11 @@ def audit(c,s,out):
 def verify_positions(c,s,out):
     """Recompute only a few images to check cached values against actual hooks."""
     import torch
-    core = p.core_module(c); ds,proc = core.Dataset(c),core.processor(c)
+    core = p.core_module(c)
+    # Match extract(): RNG state, TF32, cuDNN benchmark and determinism must be
+    # configured before loading the model or processing any image.
+    core.seed_all(c.get('split_seed',0))
+    ds,proc = core.Dataset(c),core.processor(c)
     count = s.get('verify_images',3)
     if count<1: raise ValueError('verify_images must be positive for runtime verification')
     arrays = {}; reference = None
@@ -162,12 +167,30 @@ def verify_positions(c,s,out):
                 with torch.inference_mode(): model(pixel_values=pixels[crop:crop+1].to(c['device']))
                 for ch,layer in arrays:
                     actual = capture.values[ch,layer]; saved = arrays[ch,layer][row,selected]
+                    difference = actual-saved
+                    denominator = float(np.linalg.norm(saved))
+                    norms = np.linalg.norm(actual,axis=-1)*np.linalg.norm(saved,axis=-1)
+                    valid = norms>0
+                    cosine = np.sum(actual*saved,axis=-1)[valid]/norms[valid]
                     rows.append({'image_id':image_id,'crop':crop,'channel':ch,'layer':layer,
-                        'max_absolute_error':float(np.max(np.abs(actual-saved))),
+                        'max_absolute_error':float(np.max(np.abs(difference))),
+                        'rms_error':float(np.sqrt(np.mean(difference**2))),
+                        'relative_l2_error':float(np.linalg.norm(difference)/denominator) if denominator else None,
+                        'mean_patch_cosine':float(cosine.mean()) if len(cosine) else None,
+                        'cached_abs_max':float(np.abs(saved).max()),
                         'allclose':bool(np.allclose(actual,saved,rtol=1e-4,atol=1e-4))})
     finally: capture.close()
     write(out/'runtime_position_audit.json',{'images':min(count,len(reference['image_id'])),
         'atol':1e-4,'rtol':1e-4,'allclose':all(r['allclose'] for r in rows),'comparisons':rows,
+        'runtime':{'torch':torch.__version__,'cuda':torch.version.cuda,
+            'transformers':importlib.metadata.version('transformers'),
+            'model_revision_requested':c.get('model_revision'),
+            'model_dtype':str(next(model.parameters(),torch.empty(0)).dtype),
+            'split_seed':c.get('split_seed',0),
+            'matmul_allow_tf32':torch.backends.cuda.matmul.allow_tf32,
+            'cudnn_allow_tf32':torch.backends.cudnn.allow_tf32,
+            'cudnn_deterministic':torch.backends.cudnn.deterministic,
+            'cudnn_benchmark':torch.backends.cudnn.benchmark},
         'meaning':'Compare cached vectors with current actual post-block/projection hooks, not final normalized outputs.'})
     if not all(r['allclose'] for r in rows):
         raise ValueError('Cached features differ from current computation; inspect runtime_position_audit.json before interpreting a decline.')

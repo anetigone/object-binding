@@ -117,6 +117,8 @@ python reproduction/validate_decline.py --config reproduction/config-overnight.j
 
 输出 `paired_bootstrap.json`、`position_audit.json`、`runtime_position_audit.json`、`readout_sensitivity.csv`、`geometry_checks.json`、`test_geometry.npz` 和 `status.json`。readouts各自保存checkpoint/selection/history/metrics/per_image/test_predictions；用于bootstrap的原预测不覆盖。LayerNorm对照只额外加载一次冻结权重并保存小量LN参数，不对整个数据集前向。
 
+审计重算与原提取都先调用同一数值初始化，关闭matmul/cuDNN的TF32并固定cuDNN计算设置；旧审计代码曾漏掉初始化。审计失败先看各层max/RMS/relative-L2误差、patch cosine及版本/精度设置，保持原allclose阈值，不据此自动删除缓存或改容差。
+
 若修改面板、epoch或其他设置，使用新的 `--validation-output` 目录。默认面板预先固定，不根据测试结果继续挑rank/正则化；若方向对合理配置敏感，先研究测量问题再扩展模型/数据集。
 
 默认仍读原有 `index_ade20k.pkl`、JPG和`_seg.png`。已将HF数据处理成该格式时可直接用。不在此修改ADE20K loader。

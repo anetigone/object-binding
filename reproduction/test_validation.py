@@ -95,11 +95,18 @@ class RuntimeAudit(unittest.TestCase):
         meta = {'image_id':np.array([7]),'position':np.array([[0,1,2,3]])}
         ds = NS(read=lambda i:(np.ones((2,2,3)),None,None,None))
         proc = NS(forward=lambda rgb:torch.ones(1,2,2,3))
-        core = NS(Dataset=lambda c:ds,processor=lambda c:proc,load_backbone=lambda c:model,
+        events = []
+        initialize = unittest.mock.Mock(side_effect=lambda seed:events.append('numeric_setup'))
+        def load_backbone(c):
+            self.assertTrue(events and events[0]=='numeric_setup')
+            events.append('model_load')
+            return model
+        core = NS(Dataset=lambda c:ds,processor=lambda c:proc,seed_all=initialize,load_backbone=load_backbone,
             cached=lambda c,split,l:(arrays[l],meta))
         c = dict(output='unused',crop_size=28,device='cpu'); s = dict(channels=['residual'],layers=[18,23],verify_images=1)
-        with patch.object(v.p,'core_module',return_value=core),patch.object(v,'write') as saved:
+        with patch.object(v.p,'core_module',return_value=core),patch.object(v,'write') as saved,patch.object(v.importlib.metadata,'version',return_value='mock'):
             v.verify_positions(c,s,Path('unused'))
+            initialize.assert_called_once_with(0)
             self.assertTrue(saved.call_args.args[1]['allclose'])
             arrays[23][0,0,0] += 1
             with self.assertRaisesRegex(ValueError,'Cached features differ'): v.verify_positions(c,s,Path('unused'))
