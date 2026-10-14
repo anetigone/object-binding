@@ -1,5 +1,17 @@
 # 确认实例绑定随深度的变化
 
+## 当前下一步：原始产物复核与一个线性对齐实验
+
+`linear_alignment.py` 先重算原 binding CI、验证源 checkpoint 和类别结果，再用固定
+训练 token 拟合单个 h→z ridge 映射，冻结原 z-probe 评估。没有新 probe 训练或 backbone 前向。
+缺原始产物禁止拟合。运行说明见 [LINEAR_ALIGNMENT.md](LINEAR_ALIGNMENT.md)，
+本地复核过程与结果汇总在 `research_notes/2026-10-14-l23-progress.md`。
+
+```bash
+python reproduction/linear_alignment.py --stage plan
+python reproduction/linear_alignment.py --stage all
+```
+
 ## 确认通过后：固定读出器交叉评估与独立类别分析
 
 新增 `post_confirmation.py`，默认读取 `runs/confirmation_l23_v1` 的冻结配置和完整产物。

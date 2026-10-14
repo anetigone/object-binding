@@ -1,0 +1,13 @@
+{
+  "ridge_relative": 0.001,
+  "max_statistics_images": 512,
+  "statistics_patches_per_image": 64,
+  "statistics_seed": 20261014,
+  "minimum_improvement": 0.005,
+  "bootstrap_repeats": 10000,
+  "bootstrap_bins": 2048,
+  "bootstrap_seed": 31415,
+  "bootstrap_max_auc_error": 0.0005,
+  "semantic_bootstrap_seed": 27182,
+  "cpu_threads": 4
+}
