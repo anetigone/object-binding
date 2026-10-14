@@ -9,7 +9,12 @@ MODELS = {
     'facebook/dinov2-base': {'family':'dinov2','embed_dim':768,'num_layers':12,'num_heads':12},
     'facebook/dinov2-large': {'family':'dinov2','embed_dim':1024,'num_layers':24,'num_heads':16},
 }
-CHANNELS = ('residual','q','k','v')
+CHANNELS = ('residual','q','k','v','block_input','post_attention')
+
+def channel_location(channel):
+    return {'residual':'post_block','block_input':'pre_block',
+        'post_attention':'post_attention_residual_pre_norm2',
+        'q':'norm1_input_projection','k':'norm1_input_projection','v':'norm1_input_projection'}[channel]
 
 def read_config(path, dataset_root=None, output=None):
     c = json.loads(Path(path).read_text(encoding='utf-8'))
@@ -100,6 +105,8 @@ class Capture:
     residual[l]: post-block l, before the model's final LayerNorm.
     q/k/v[l]: projections of norm1(block-l input), before attention/head reshape.
     They describe the same block, not the same point in its computation.
+    block_input[l]: input to block l (before norm1).
+    post_attention[l]: input to norm2, after the attention residual addition.
     """
     def __init__(self, model, layers, channels):
         self.handles, self.values, self.indices = [], {}, None
@@ -107,12 +114,24 @@ class Capture:
         for layer in layers:
             block = model.encoder.layer[layer]
             for channel in channels:
-                module = block if channel=='residual' else self.projection(block,channel)
-                targets.append((module,channel,layer))
+                if channel in ('residual','block_input'): module = block
+                elif channel=='post_attention':
+                    module = getattr(block,'norm2',None)
+                    if module is None:
+                        raise ValueError('Unsupported DINOv2 block: post_attention requires block.norm2')
+                else: module = self.projection(block,channel)
+                targets.append((module,channel,layer,channel in ('block_input','post_attention')))
         # Resolve every target first, so an incompatible model leaves no partial hooks.
         try:
-            for module,channel,layer in targets:
-                self.handles.append(module.register_forward_hook(self.hook(channel,layer)))
+            for module,channel,layer,pre in targets:
+                callback = self.hook(channel,layer)
+                if pre:
+                    def pre_hook(module, inputs, kwargs, callback=callback):
+                        value = inputs[0] if inputs else kwargs.get('hidden_states',kwargs.get('input'))
+                        if value is None: raise ValueError('Cannot locate tensor input for computation-point hook')
+                        callback(module,inputs,value)
+                    self.handles.append(module.register_forward_pre_hook(pre_hook,with_kwargs=True))
+                else: self.handles.append(module.register_forward_hook(callback))
         except Exception:
             self.close()
             raise
@@ -155,7 +174,8 @@ def extract(c, core):
     if split_file.exists() and json.loads(split_file.read_text())!=ds.splits:
         raise RuntimeError('Splits changed; choose a new output directory')
     core.save_json(split_file,ds.splits)
-    core.save_json(root/'resource_plan.json',plan)
+    provenance = Path(c.get('provenance_output',root))
+    core.save_json(provenance/'resource_plan.json',plan)
     signature = core.cache_signature(c,ds)
     pending = {}
     additional = 0
@@ -234,13 +254,13 @@ def extract(c, core):
                 core.save_json(folder/'manifest.json',{'schema':2,'signature':signature,'complete':True,
                     'shape':[len(ids),c['saved_patches'],c['embed_dim']],'layers':sorted(existing|set(missing)),
                     'channel':channel,'precision':'float32','num_heads':c['num_heads'],
-                    'location':'post_block' if channel=='residual' else 'norm1_input_projection'})
+                    'location':channel_location(channel)})
         finally:
             capture.close()
             maps.clear()
             # A loop variable can otherwise keep the last mmap open on Windows.
             if 'mm' in locals(): del mm
-    core.save_json(root/'environment.json',{'torch':torch.__version__,'cuda':torch.version.cuda,
+    core.save_json(provenance/'environment.json',{'torch':torch.__version__,'cuda':torch.version.cuda,
         'transformers':importlib.metadata.version('transformers'),
         'model_commit':getattr(model.config,'_commit_hash',None),'model':c['model'],
         'code_commit':git_commit(),'config':c})

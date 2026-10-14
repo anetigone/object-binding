@@ -1,0 +1,21 @@
+{
+  "baseline_layers": [18, 23],
+  "baseline_source": "validation/readouts/residual/full_seed0",
+  "depth_layers": [18, 20, 22, 23],
+  "step_layers": [23],
+  "sampling_seed": 0,
+  "probe_seed": 0,
+  "probe_weight_decay": 0.0,
+  "max_binding_tasks": 6,
+  "bootstrap_repeats": 2000,
+  "bootstrap_bins": 2048,
+  "bootstrap_seed": 31415,
+  "bootstrap_max_auc_error": 0.0005,
+  "minimum_examples_per_class": 20,
+  "near_distance": 0.25,
+  "boundary_threshold": 0.01,
+  "semantic_num_classes": 150,
+  "semantic_epochs": 16,
+  "semantic_learning_rate": 0.001,
+  "max_semantic_tasks": 6
+}

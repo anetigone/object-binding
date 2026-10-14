@@ -1,6 +1,6 @@
 # 确认实例绑定随深度的变化
 
-目的：先检验 residual 中“同实例”与“同类别不同实例”的分离是否随深度非单调变化，再对照 Q/K/V。跨模型、跨数据集重复出现后，才进入理论与因果实验。中层峰值、深层类别分组都不是预设结论。
+目的：先验证 residual 中实例区分的深度变化，再定位受损的 patch 关系与计算步骤。已有 L18→L23 下降的测量验证后，优先用同模型、同数据的条件分析和末段定位推进机制研究；跨模型/数据集放到解释有信号后。中层峰值、深层类别分组都不是预设结论。
 
 本次修改没有运行预训练模型或正式训练。现有 ADE20K 数据读取接口保持不变；服务器自行处理的版本没有被本地覆盖。**主入口改为 `phenomenon.py`**，训练/评估复用 `run_server.py`。
 
@@ -130,6 +130,67 @@ python reproduction/validate_decline.py --config reproduction/config-overnight.j
 - 遵循max_train/max_val/max_test和split_seed，或提供明确固定清单。
 
 多模型要使用相同split和配对；多数据集的类别、实例标注定义需单独记录，不能把各自总体accuracy直接比较。
+
+## 验证完成后的下一轮：条件分析与计算步骤定位
+
+新入口 `investigate_decline.py`，设置在 `config-investigation.json`。必须传**服务器实际完成 validation 的原配置**；不改服务器 ADE20K loader。默认仍是 `plan`，不加载模型、不下载、不训练。所有新报告和读出器在原 run 的 `investigation/` 下，原 `validation/`、checkpoint、requested_config 和 environment 不覆盖。增量特征仍放原 `channels/*/cache/`，便于复用；提取 provenance 单独保存到对应 investigation scope。
+
+先做无新前向、无训练的条件分析：
+
+```bash
+python reproduction/test_investigation.py
+python reproduction/investigate_decline.py --config reproduction/config-overnight.json --stage conditions
+```
+
+默认读取 `validation/readouts/residual/full_seed0/layer_{18,23}` 的验证集选择后预测、`validation/test_geometry.npz`、residual labels 和 splits；不会重新计算几何或读取原图。重新核验缓存签名、预测标签、patch 逐位配对和 crop 标识。源读出器的训练/评估参数必须与传入配置一致。缺文件时明确报错，不退回原主运行的不同 selector。若验证输出位置不同，修改 `baseline_source`（相对 run 的路径）。
+
+- `conditions.json` / `.csv`：hard-instance、前景 binding、同实例 vs 跨类负例、同/跨 crop、近/远、内部/边界、观测到2个/至少3个同类实例的条件内 AUROC，以及 pooled 和逐图 macro 降幅。每组保留正/负样本数、覆盖图像数；缺支持时为空，不把空组计作无下降。
+- 实例数量只统计**同 crop 中 saved patches 观测到的同类实例**，是实际数量的下界；不是完整场景竞争量。距离/边界阈值预设在设置文件中。这是探索性分组，没有标注外观相似性或遮挡连续性，不能用这些名称解释输出。
+- `anchored_rankings.json`：同 crop 内固定的 anchor/同实例正例/同类不同实例负例三元组，比较两个层的排序正确率，计数 win→loss 与 loss→win，平分 ties，并保存逐图结果。该量对严格单调分数校准不变。三元组共享图像和 anchor，不作独立三元组显著性检验。
+- 原始正负 logit 中位数只作辅助；跨层校准不同，不能将它直接解释为“聚拢/排斥”。条件分析并不证明某个因素导致了下降。
+
+需要条件内图像聚类 CI 时再显式执行（CPU 开销明显增加）：
+
+```bash
+python reproduction/investigate_decline.py --config reproduction/config-overnight.json --stage condition-ci
+```
+
+输出 `condition_ci.json` / `.csv`，沿用配对图像 bootstrap 与分箱误差检查；不具备双标签的重采样组会标记 CI 不可用。多组 CI 是探索性结果，不包含多重比较校正。
+
+随后只补 residual 的 L20/L22，原 L18/L23 缓存复用。新训练沿用验证阶段 full_seed0 的训练 batch/patch 抽样、seed、L2 与 validation hard-instance AUROC selector，首 epoch 赢得 ties。已验证的 L18/L23 通过引用复用，默认仅新增2个 binding 训练任务：
+
+```bash
+python reproduction/investigate_decline.py --config reproduction/config-overnight.json --scope depth --stage plan
+python reproduction/investigate_decline.py --config reproduction/config-overnight.json --scope depth --stage all
+```
+
+`all` 仅执行当前 scope 的 `extract → train binding → report`，不启动条件分析、另一个 scope 或独立类别训练。2000/300/500图、256patch、1024维时，两个新 residual 层增加约 **5.47 GiB**；原32.81 GiB缓存变为约38.28 GiB。实际 plan 根据已有manifest列出缺失项，extract再次核算保留缓存、增量和磁盘余量。
+
+深度定位有信号后，再选择计算步骤对照。默认只对 L23 做三个位置：
+
+- `block_input`：block 输入，norm1 前。
+- `post_attention`：norm2 输入，**实际 attention 残差相加之后**，含模型原有 layer scale/drop path，不是单独的 attention 分支输出。
+- `residual`：block 输出，MLP 残差相加之后，final LN 前。
+
+```bash
+python reproduction/investigate_decline.py --config reproduction/config-overnight.json --scope steps --stage plan
+python reproduction/investigate_decline.py --config reproduction/config-overnight.json --scope steps --stage all
+```
+
+新增两个位置约 **5.47 GiB**，含depth增量时总计约43.75 GiB；L23 residual的缓存和已验证probe复用，仅新增2个binding训练。`step_layers` 可改为定位出的单个block；不要默认同时展开多个block。当前预算48 GiB，depth后同时缓存L22/L23的两个新位置会超过预算，提取会拒绝。配置更改需指定新的 `--investigation-output`，例如 `runs/phenomenon_overnight/investigation_block22`，原缓存依然复用。
+
+报告 `measurements.csv`、`measurements.png`、`report.json` 分开呈现 hard-instance AUROC、binding分数的category AUROC和独立类别probe。相邻深度/同block计算步骤的 binding 变化附配对图像CI。完成数量和来源明确记录，允许先生成部分报告。不同位置各自训练读出器，所以这些测量定位的是**可解码性变化，不是因果干预**；本轮未实现分支缩放或恢复能力的实验。
+
+独立类别probe只用已缓存特征：已知前景patch上的150类线性分类器，按val宏平均召回选择epoch，报告test accuracy、macro recall、每类支持与逐图计数；不使用binding分数充当语义能力。默认16epoch、1seed，无新的backbone前向。它既不证明类别聚类增强，也不直接衡量实例身份。
+
+```bash
+python reproduction/investigate_decline.py --config reproduction/config-overnight.json --scope depth --stage semantic
+python reproduction/investigate_decline.py --config reproduction/config-overnight.json --scope depth --stage report
+```
+
+steps scope也可单独执行semantic，默认3个任务；depth默认4个。`semantic_num_classes` 是明确的标注taxonomy，接自定义数据时需修改，不能从test标签推断类别数。`max_binding_tasks`、`max_semantic_tasks` 控制任务上限。未执行semantic时图中标记Not run，不将其算作binding流程未完成。
+
+本地只验证CPU合成数据、真实probe类、缓存/配对检查和hook；服务器正式模型的提取与数值一致性仍由服务器运行确认。
 
 ## 主指标与结果
 

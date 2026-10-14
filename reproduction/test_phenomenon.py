@@ -43,7 +43,7 @@ class Hooks(unittest.TestCase):
                 q,k,v = a.query(z),a.key(z),a.value(z)
                 return x+q+k+v
         block = Block()
-        capture = p.Capture(NS(encoder=NS(layer=[block])),[0],list(p.CHANNELS))
+        capture = p.Capture(NS(encoder=NS(layer=[block])),[0],['residual','q','k','v'])
         indices = np.array([0,3]); capture.indices = indices
         x = torch.randn(1,6,8)
         with torch.inference_mode(): out = block(x)
@@ -78,7 +78,7 @@ class Hooks(unittest.TestCase):
                 z = self.norm1(x)
                 return x+self.attention.q_proj(z)+self.attention.k_proj(z)+self.attention.v_proj(z)
         block = Block()
-        capture = p.Capture(NS(encoder=NS(layer=[block])),[0],list(p.CHANNELS))
+        capture = p.Capture(NS(encoder=NS(layer=[block])),[0],['residual','q','k','v'])
         capture.indices = np.array([0,2])
         x = torch.randn(1,5,8)
         with torch.inference_mode():

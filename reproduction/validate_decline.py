@@ -121,7 +121,7 @@ def audit(c,s,out):
             manifest = json.loads((base/'manifest.json').read_text())
             if layer not in manifest['layers'] or not manifest['complete']:
                 raise ValueError('Requested layer cache incomplete')
-            expected = 'post_block' if channel=='residual' else 'norm1_input_projection'
+            expected = p.channel_location(channel)
             if manifest.get('location')!=expected or manifest.get('channel')!=channel:
                 raise ValueError('Missing or inconsistent computation-location provenance')
             if manifest['shape'][1:]!=[c['saved_patches'],c['embed_dim']]:
@@ -131,7 +131,8 @@ def audit(c,s,out):
         aligned(*labels)
         rows.append({'channel':channel,'layers':s['layers'],'locations':[m['location'] for m in manifests],
             'same_patch_pairs':True,'same_signature':manifests[0]['signature']==manifests[1]['signature'],
-            'final_layernorm_in_residual_cache':False if channel=='residual' else None,
+            'final_layernorm_in_residual_cache':None,
+            'final_layernorm_excluded_by_declared_location':channel=='residual',
             'scope':'Manifest and prediction alignment audit; cannot certify a changed server extractor from provenance alone.'})
     write(out/'position_audit.json',rows)
 
