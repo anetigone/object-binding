@@ -129,6 +129,7 @@ class Observation(unittest.TestCase):
         from torchvision.transforms import functional as TF
         with tempfile.TemporaryDirectory(dir=o.p.HERE/'tmp') as tmp:
             c,core = self.fixture(Path(tmp))
+            c['observation']['cases_per_group'] = 2
             tree = ast.parse((core.UPSTREAM/'src/data_extractor.py').read_text(encoding='utf-8'))
             nodes = [n for n in tree.body if isinstance(n,ast.ClassDef) and n.name=='ImageProcessor']
             ns = dict(torch=torch,np=np,math=math,torchvision=torchvision,TF=TF,F=torch.nn.functional)
@@ -137,12 +138,16 @@ class Observation(unittest.TestCase):
             inst = np.full((518,518),3,dtype=np.int32)
             inst[:,:28] = 1; inst[:,28:56] = 2
             rgb = np.full((518,518,3),128,dtype=np.uint8)
-            core.Dataset = lambda cfg:NS(splits=dict(test=[30,31]), read=lambda image_id:(rgb,np.ones_like(inst),inst,np.zeros_like(inst)))
+            inst_second = np.full_like(inst,3)
+            inst_second[:,:56] = 1; inst_second[:,56:112] = 2
+            core.Dataset = lambda cfg:NS(splits=dict(test=[30,31]), read=lambda image_id:(rgb,np.ones_like(inst),inst if image_id==30 else inst_second,np.zeros_like(inst)))
             for variant in c['observation']['variants']:
                 for objective in c['observation']['objectives']:
                     for channel in c['channels']:
                         dest = o.task(c,objective,variant,channel); dest.mkdir(parents=True)
                         meta = {k:np.tile(val,(2,1)) for k,val in self.meta().items()}
+                        # Different geometries catch reuse of the final image's distance matrix.
+                        meta['position'][1] *= 2
                         # Make positive edges win at both endpoints, so stable examples exist.
                         same = meta['instance'][:,:,None] == meta['instance'][:,None,:]
                         score = np.where(same,2.,0.).astype(np.float32)
@@ -151,10 +156,14 @@ class Observation(unittest.TestCase):
                         o.write(dest/'artifacts.json',{f:o.digest(dest/f) for f in ('checkpoint.pt','history.json','selection.json','test_predictions.npz','metrics.json')})
             with contextlib.redirect_stdout(io.StringIO()): o.visualize(c,core)
             index = o.read(Path(c['output'])/'observation/cases/index.json')
-            self.assertEqual(len(index['cases']),4)
+            self.assertEqual(len(index['cases']),8)
             from PIL import Image
             for record in index['cases']:
                 self.assertEqual(record['group'],'stable')
+                positions = np.asarray(record['patch_positions'])
+                xy = np.stack((positions//37, positions%37),axis=1)
+                expected = [float(np.linalg.norm(xy[0]-xy[i])) for i in (1,2)]
+                np.testing.assert_allclose(record['distances'],expected,rtol=0,atol=1e-12)
                 with Image.open(record['path']) as im: self.assertGreater(im.width,1000)
 
     def test_refuses_old_outputs_and_unpaired_cache(self):

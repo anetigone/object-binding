@@ -448,6 +448,8 @@ def visualize(c, core):
                 for choice in rng.permutation(len(pool))[:s['cases_per_group']]:
                     row, ts = pool[choice]; triple = ts[rng.integers(len(ts))]; anchor, positive, negative = map(int, triple)
                     image_id = int(a['image_id'][row]); pos = a['position'][row]; crop = int(pos[anchor]//1369)
+                    case_meta = {k: a[k][row] for k in ('instance', 'semantic', 'background', 'position')}
+                    case_relations = relation_sets(case_meta, s['distance_bin_patches'])
                     rgb, sem, inst, bg = ds.read(image_id)
                     crops = proc.forward(rgb).numpy()
                     imask = proc.forward_patch(inst[:, :, None]).numpy()[crop, :, :, 0]
@@ -479,7 +481,7 @@ def visualize(c, core):
                         selected_saved_indices=[anchor, positive, negative], patch_positions=pos[triple].tolist(),
                         before_scores=a['score'][row, anchor, [positive, negative]].tolist(),
                         after_scores=b['score'][row, anchor, [positive, negative]].tolist(),
-                        distances=[float(rel['distance'][anchor, positive]), float(rel['distance'][anchor, negative])],
+                        distances=[float(case_relations['distance'][anchor, positive]), float(case_relations['distance'][anchor, negative])],
                         selection='Uniform eligible image then uniform qualifying triple; post hoc examples, not representative prevalence.',
                         display='Only sampled tokens; within-crop score ranks, not calibrated probabilities.', path=str(folder/'case.png'))
                     write(folder/'case.json', record); catalogue.append(record)
